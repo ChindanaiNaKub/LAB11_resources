@@ -2,14 +2,12 @@ const express = require("express");
 const app = express();
 const listItem = require("./model/listItem");
 const db = require("./config/db"); // Import MySQL connection
-
-const Authen = require("./control/authen");
+const Authen = require("./control/authen"); // Import authentication controller
 
 const session = require("express-session");
 const mysqlStore = require("express-mysql-session")(session);
 const bcrypt = require("bcryptjs");
 const UserDB = require("./model/userModel"); // Import User Model
-
 
 app.set("view engine", "ejs");
 app.set("views", __dirname + "/views");
@@ -17,7 +15,6 @@ app.use(express.urlencoded({ extended: true })); // To parse form data
 app.use(express.static("public")); // Serve static files
 
 // Configure session store
-
 const options = db.config;
 options.createDatabaseTable = true; // Create session table if it doesn't exist
 
@@ -27,101 +24,116 @@ app.use(
   session({
     store: sessionStore,
     secret: "jklfsodifjsktnwjasdp465dd", // A secure secret key
-    resave: true, // Forces session to be saved in the database
-    saveUninitialized: true, // Saves sessions even if not modified
+    resave: true,
+    saveUninitialized: true,
     cookie: {
       maxAge: 3600000, // Session expires in 1 hour
-      sameSite: true,  // Prevents CSRF attacks
-      httpOnly: true,  // Prevents XSS attacks by restricting JS access to cookies
-      secure: false,   // Set to true if using HTTPS
+      sameSite: true,
+      httpOnly: true,
+      secure: false,
     },
   })
 );
 
+// 🔹 Root Route (Show Login Page)
+// Root Route (Show Login Page)
+app.get("/", (req, res) => {
+  // Clear any existing session when hitting the login page directly
+  // This ensures we start fresh unless coming from a proper login
+  if (req.query.q !== 'session-expired') {
+    req.session.authenticated = false;
+    req.session.userId = null;
+  }
+  
+  res.render("index", { error: req.query.error || null });
+});
 
-app.post("/login", async (req, res) => {
+// 🔹 Login API (Handles authentication)
+app.post('/login', async (req, res) => {
   try {
-      console.log("Request Body:", req.body); // Debug request body
-      
-      const { username, password } = req.body;
-
-      if (!username || !password) {
-          throw new Error("Username or password is missing");
-      }
-
-      await Authen.userLogin(req, res, username, password);
-      res.redirect("/todos"); 
+    const { username, password } = req.body;
+    console.log('Login attempt:', username);
+    
+    // Call the authentication function
+    await Authen.userLogin(req, res, username, password);
+    
+    // If we get here, authentication was successful
+    console.log('User authenticated, redirecting to todos');
+    res.redirect('/todos');
   } catch (error) {
-      console.error("❌ Login error:", error.message);
-      res.status(401).json({ message: error.message });
+    console.error('Login error:', error);
+    res.render('index', { error: 'Invalid username or password' });
   }
 });
 
-
-
+// 🔹 Signup API (Create new user)
 app.post("/signup", async (req, res) => {
   try {
-      const { email, password } = req.body; // Using email instead of username
-      const hashedPassword = bcrypt.hashSync(password, 10);
+    const { username, password } = req.body; // Use username instead of email
+    const hashedPassword = bcrypt.hashSync(password, 10);
 
-      // Insert new user into the database
-      await UserDB.create({ email: email, password: hashedPassword });
+    // Insert new user into the database
+    await UserDB.create({ username: username, password: hashedPassword });
 
-      res.redirect("/login"); // Redirect to login page after signup
+    res.redirect("/"); // Redirect to login page after signup
   } catch (error) {
-      console.error("❌ Signup error:", error);
-      res.redirect("/signup?error=user_exists");
+    console.error("❌ Signup error:", error);
+    res.redirect("/signup?error=user_exists");
   }
 });
 
-
-// app.get("/", (req, res) => {
-//   if (req.session.authenticated) {
-//       res.redirect("/list"); // Redirect logged-in users
-//   } else {
-//       res.render("index", { error: null }); // Show login page for unauthenticated users
-//   }
-// });
-
-
-// GET route to display tasks
-app.get("/", async (req, res) => {
+// 🔹 Protected Route: `/todos` (Requires Authentication)
+app.get("/todos", Authen.authentication, async (req, res) => {
   try {
-      // await listItem.create({ name: "SE262!" }); // Insert example task
-      const items = await listItem.findAll(); // Fetch tasks from DB
-      res.render("list", { listTitle: "Today", newListItems: items });
+    const items = await listItem.findAll(); // Fetch tasks from DB
+    const user = await UserDB.findById(req.session.userId); // Fetch user details
+
+    res.render("list", {
+      listTitle: "Today",
+      newListItems: items,
+      user: user, // Pass user info to EJS
+    });
   } catch (error) {
-      console.error("❌ Error fetching tasks:", error);
-      res.render("list", { listTitle: "Today", newListItems: [] }); // Show an empty list if error
+    console.error("❌ Error fetching tasks:", error);
+    res.render("list", { listTitle: "Today", newListItems: [], user: null });
   }
 });
 
-// POST route to add new task
-app.post("/add", async (req, res) => {
+// 🔹 Add New Task
+app.post("/add", Authen.authentication, async (req, res) => {
   try {
-      const newItem = { name: req.body.newItem }; // Get task name from form
-      await listItem.create(newItem); // Insert into database
-      res.redirect("/"); // Reload the page
+    const newItem = { name: req.body.newItem };
+    await listItem.create(newItem);
+    res.redirect("/todos");
   } catch (error) {
-      console.error("❌ Error adding task:", error);
-      res.redirect("/");
+    console.error("❌ Error adding task:", error);
+    res.redirect("/todos");
   }
 });
 
-app.post("/delete", async (req, res) => {
+// 🔹 Delete Task
+app.post("/delete", Authen.authentication, async (req, res) => {
   try {
-      const deleteItemId = req.body.id; // Get task ID from form
-      await listItem.delete(deleteItemId); // Delete task from DB
-      res.redirect("/"); // Reload page
+    const deleteItemId = req.body.id;
+    await listItem.delete(deleteItemId);
+    res.redirect("/todos");
   } catch (error) {
-      console.error("❌ Error deleting task:", error);
-      res.redirect("/");
+    console.error("❌ Error deleting task:", error);
+    res.redirect("/todos");
   }
 });
 
+// 🔹 Logout API
+app.get("/logout", (req, res) => {
+  req.session.destroy((err) => {
+    if (err) {
+      return res.status(500).json({ message: "Failed to log out." });
+    }
+    res.redirect("/");
+  });
+});
 
-
-// Start Server
+// 🔹 Start Server
 app.listen(3000, () => {
-    console.log("Server started on port 3000");
+  console.log("✅ Server started on port 3000");
 });
