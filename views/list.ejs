@@ -1,0 +1,28 @@
+<%- include("partials/header") %> <!-- Include header -->
+
+<div class="box" id="heading">
+  <h1><%= listTitle %></h1> <!-- Dynamic Title -->
+</div>
+
+<!-- Display List Items Dynamically -->
+<div class="box">
+  <% newListItems.forEach(item => { %>
+    <form action="/delete" method="POST"> <!-- Delete task when checked -->
+      <div class="item">
+        <input type="hidden" name="id" value="<%= item.id %>">
+        <input type="checkbox" name="checkbox" onChange="this.form.submit()">
+        <span><%= item.name %></span>
+      </div>
+    </form>
+  <% }) %>
+</div>
+
+<!-- Input for Adding New Items -->
+<div class="box">
+  <form class="item" action="/add" method="POST">
+    <input type="text" name="newItem" placeholder="New item" autocomplete="off" required />
+    <button class="list" type="submit" name="list" value="<%= listTitle %>">+</button>
+  </form>
+</div>
+
+<%- include("partials/footer") %> <!-- Include footer -->
