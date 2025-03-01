@@ -55,14 +55,14 @@ app.post('/login', async (req, res) => {
     console.log('Login attempt:', username);
     
     // Call the authentication function
-    await Authen.userLogin(req, res, username, password);
+    const user = await Authen.userLogin(req, res, username, password);
     
     // If we get here, authentication was successful
     console.log('User authenticated, redirecting to todos');
-    res.redirect('/todos');
+    return res.redirect('/todos'); // Use return to ensure no further code is executed
   } catch (error) {
     console.error('Login error:', error);
-    res.render('index', { error: 'Invalid username or password' });
+    return res.render('index', { error: 'Invalid username or password' }); // Use return to ensure no further code is executed
   }
 });
 
@@ -91,7 +91,7 @@ app.get("/todos", Authen.authentication, async (req, res) => {
     res.render("list", {
       listTitle: "Today",
       newListItems: items,
-      user: user, // Pass user info to EJS
+      user: user, // Pass user object to EJS
     });
   } catch (error) {
     console.error("❌ Error fetching tasks:", error);
@@ -132,6 +132,17 @@ app.get("/logout", (req, res) => {
     res.redirect("/");
   });
 });
+
+// 🔹 Logout API
+app.post("/logout", (req, res) => {
+  req.session.destroy((err) => {
+    if (err) {
+      return res.status(500).json({ message: "Failed to log out." });
+    }
+    res.redirect("/");
+  });
+});
+
 
 // 🔹 Start Server
 app.listen(3000, () => {

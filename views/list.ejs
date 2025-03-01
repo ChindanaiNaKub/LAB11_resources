@@ -1,7 +1,28 @@
 <%- include("partials/header") %> <!-- Include header -->
 
+<style>
+  .user-info {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-top: 10px;
+  }
+  .user-info h4 {
+    margin: 0;
+  }
+  .user-info form {
+    margin-top: 5px;
+  }
+</style>
+
 <div class="box" id="heading">
   <h1><%= listTitle %></h1> <!-- Dynamic Title -->
+  <div class="user-info">
+    <h4>Hello, <%= user.username %></h4>
+    <form action="/logout" method="POST">
+      <button type="submit">Log out</button>
+    </form>
+  </div>
 </div>
 
 <!-- Display List Items Dynamically -->
